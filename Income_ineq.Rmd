@@ -1,0 +1,82 @@
+---
+title: "Income inequality"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Install packages
+```{r}
+#install.packages("tidyverse")
+#install.packages("fitdistrplus")
+library(tidyverse)
+library(fitdistrplus)
+```
+
+
+
+
+## Reading in Data
+
+# check working drive
+```{r}
+setwd("/Users/kirstenoleson/Dropbox/R_GPI")
+getwd()
+```
+
+# 2018 data as a test
+```{r}
+inc_ineq <- read_csv("./Inc_ineq_cleaned_ready.csv")#),col_types = "dddddddd") 
+inc_ineq$Bracket_max[which(inc_ineq$Bracket_max=="Inf")]=500000
+inc_ineq$Bracket_max=as.numeric(inc_ineq$Bracket_max)
+inc_ineq$Bracket_width=inc_ineq$Bracket_max-inc_ineq$Bracket_min
+inc_ineq$Bracket_mid=(inc_ineq$Bracket_max+inc_ineq$Bracket_min)/2
+iibins=as.data.frame(inc_ineq[,c("Year","Bracket_min","Bracket_max","Num_returns")])
+
+reduce_factor=1
+iibins$Nrep=floor(iibins$Num_returns/reduce_factor)
+iiyr=iibins%>%uncount(weights = Nrep)
+names(iiyr)[c(2,3)]=c("left","right")
+
+uY=unique(inc_ineq$Year)
+uY=c(2000:2006,2012:2018)
+Yout=data.frame(Year=uY,meanlog=NA,sdlog=NA,median=NA)
+xr=seq(0,500000,length.out=1000)
+paramcurves=NULL
+for(i_y in 1:length(uY)){
+  thisy=subset(iiyr,Year==uY[i_y])
+  disty=fitdistcens(censdata = thisy,distr = "lnorm",start = list(meanlog=10,sdlog=1))
+  Yout$meanlog[i_y]=disty$estimate[1]
+  Yout$sdlog[i_y]=disty$estimate[2]
+  Yout$median[i_y]=exp(disty$estimate[1])
+  paramcurves=rbind(paramcurves,data.frame(Year=uY[i_y],x=xr,y=dlnorm(x=xr,meanlog=disty$estimate[1],sdlog = disty$estimate[2])))
+  print(uY[i_y])
+  print(Yout[1:i_y,])
+}
+Yout
+inc_ineq$count_dens=inc_ineq$Num_returns/(3*inc_ineq$Bracket_width*max(inc_ineq$Num_returns))
+ggplot(subset(inc_ineq,Year%in%2012:2018),aes(x=Bracket_mid,y=count_dens))+
+  geom_col(aes(width=Bracket_width),color="black",fill="gray75")+
+  geom_path(data=paramcurves,aes(x=x,y=y),color="green")+
+  geom_vline(aes(xintercept = median),data=Yout,color="darkred")+
+  geom_text(aes(x=median*3,y=2e-5,label=round(median,2)),data=Yout)+
+  facet_wrap("Year")+
+  theme_bw()
+
+write.csv(Yout,"LogNormFits.csv")
+
+```
+Note that the data are being recognized as chr and dbl; need to figure out how to fix this
+```{r}
+inc_ineq_2018$Bracket_max=as.numeric(inc_ineq_2018$Bracket_max)
+```
+
+
+
+
+##
+
