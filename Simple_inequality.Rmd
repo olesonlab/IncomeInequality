@@ -9,16 +9,19 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Load packages
+This RMarkdown document describes the steps taken to calculate the income inequality ratios per the methodology in Talberth and Weisdorf.
+
+## Load packages
 You have to have all packages installed, then load them as follows. Note that the order is important, as they will mask one another.
 ```{r message=FALSE, warning=FALSE}
 library(DescTools)
+library(patchwork)
 library(fitdistrplus)
 library(spatstat)
 library(tidyverse)
 ```
 
-# Functions
+## Functions
 It is good practice to start out the script with the functions you will use
 ```{r}
 DMUI=function(x,m){ #DMUI is a function with inputs x (income) and m (the median OR the sufficiency threshold)
@@ -28,16 +31,16 @@ DMUI=function(x,m){ #DMUI is a function with inputs x (income) and m (the median
 }  
 ```
 
-# Read in the income data
+## Read in the income data
 The data are derived from (NEED INFORMATION/LINK HERE)
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Read in data as a tibble
 inc_ineq <- read_csv("Inc_ineq_cleaned_ready.csv",col_types = "dddcdddddd") #note Bracket_max is a character because of infinite and the annoying way that read_csv works
 ```
 
-# Wrangle and look at the income data
+## Wrangle and look at the income data
 We have a bit of clean up work to do on the imported income data. For one, the max bracket always refers to infinity (INF) so we need to assign it a number. We also have to make sure that that variable is then recognized as a number (above we indicated it was a character to avoid throwing an error during import). We also add some columns to the dataframe that we will need.
-```{r}
+```{r message=FALSE, warning=FALSE}
 #Set "infinite" upper bound at 1,000,000 and make sure data types are numeric
 inc_ineq$Bracket_max[which(inc_ineq$Bracket_max=="Inf")]=1000000
 inc_ineq$Bracket_max=as.numeric(inc_ineq$Bracket_max)
@@ -59,9 +62,9 @@ plot(subset(inc_ineq,Num_returns>0)$Bracket_mid,subset(inc_ineq,Num_returns>0)$A
 abline(0,1)
 ```
 
-# Calculating the ratio between Adjusted and Unadjusted income
+## Calculating the ratio between Adjusted and Unadjusted income
 
-## Starting with the median-based adjustment
+### Median-based adjustment
 
 We calculate the weighted median, using bin mean and number of returns. We then adjust all brackets above this median using the function we created. We also adjust the bracket in which the sample median falls if the bracket mean is greater than the sample median; we do not adjust the bracket if its mean is less than the sample median.
 ```{r}
@@ -89,16 +92,35 @@ Ysum <- inc_ineq %>%
 #generate ratios of unadjusted and adjusted integrals
 Ysum$DMUI_Ratio=Ysum$AGI_annDMUI/Ysum$AGI_ann
 
-plot(Ysum$Year,Ysum$DMUI_Ratio)
+```
 
+We write everything to output files
+```{r}
+#Write to output file
 output_M<-Ysum %>% select(Year,DMUI_Ratio)
-output_M<-Ysum[,c("Year","DMUI_Ratio")]
+#output_M<-Ysum[,c("Year","DMUI_Ratio")]
 
 write_csv(output_M,"DMUI_Ratio_Median.csv")
 ```
 
-### Plot all years
-```{r}
+####Plots
+```{r message=FALSE, warning=FALSE}
+plot(Ysum$Year,Ysum$DMUI_Ratio)
+
+ggplot(output_M, 
+       aes(Year, DMUI_Ratio)) +
+    geom_point() +
+    geom_path() +
+    labs(title = "Diminishing marginal utility of income ratio", subtitle = "Median method") +
+    scale_x_continuous(name="Year",limits=c(1960,2020)) +  
+    scale_y_continuous(name = "DMUI ratio", limits=c(0.65, 0.85)) +
+    theme_bw()
+```
+
+
+#### Plot all years
+This plots the actual and adjusted income distributions for all years.
+```{r message=FALSE, warning=FALSE}
 ggplot(inc_ineq)+
   geom_point(aes(AGI_bin_mean_DMUI,Num_returns),color="blue")+
   geom_path(aes(AGI_bin_mean_DMUI,Num_returns),color="blue")+
@@ -109,14 +131,13 @@ ggplot(inc_ineq)+
   geom_vline(data=Y_med,aes(xintercept=Median))
 ```
 
-## Do it all again with the sufficiency thresholds
+### Sufficiency thresholds
 
 We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. These data are derived from (NEED SOURCE)
-```{r}
+```{r message=FALSE, warning=FALSE}
 suff_th <- read_csv("Suff_thresh_INQ_clean.csv")
 head(suff_th)
 ```
-
 
 Now we want to run the DMUI function using the sufficiency threshold, and add the ratio to the output dataframe
 ```{r}
@@ -130,12 +151,13 @@ Ysum_ST <- inc_ineq %>%
 view(Ysum_ST)
 
 Ysum_ST$DMUI_Ratio_ST=Ysum_ST$AGI_annSTDMUI/Ysum_ST$AGI_ann
+```
 
-view(Ysum_ST)
-plot(Ysum_ST$Year,Ysum_ST$DMUI_Ratio_ST)
-
+We create the output files for the sufficiency threshold and for both methods
+```{r message=FALSE, warning=FALSE}
 output_ST<-Ysum_ST %>% select(Year,DMUI_Ratio_ST)
-output_ST<-Ysum_ST[,c("Year","DMUI_Ratio_ST")]
+#output_ST<-Ysum_ST[,c("Year","DMUI_Ratio_ST")]
+
 write_csv(output_ST,"DMUI_Ratio_ST.csv")
 
 #Create a combined data file
@@ -143,14 +165,20 @@ output_all <- left_join(output_M, output_ST)
 write_csv(output_all,"DMUI_Ratio_both.csv")
 ```
 
-This compares the two Ratios
+####Plots
+We plot the DMUI ratio based on sufficiency threshold
 ```{r}
+plot(Ysum_ST$Year,Ysum_ST$DMUI_Ratio_ST)
+```
+
+This compares the two ratios
+```{r message=FALSE, warning=FALSE}
 oa_plot=output_all %>% pivot_longer(cols=c("DMUI_Ratio","DMUI_Ratio_ST"))
 
 ggplot(oa_plot, aes(x = Year, y = value,color=name)) +
   geom_point(aes()) +
   geom_path(aes()) +
-  scale_color_discrete(name="Threshold Style",type=c("blue","darkgreen"),labels=c("Median","Sufficiency"))
+  scale_color_discrete(name="Threshold Style",type=c("blue","darkgreen"),labels=c("Median","Sufficiency")) +
   labs(x = "Year",
        y = "Ratio of adjusted income to unadjusted income",
        color = "Legend") +
@@ -159,14 +187,11 @@ ggplot(oa_plot, aes(x = Year, y = value,color=name)) +
 ```
 
 
-# GINI for comparison
+## GINI for comparison
 
 To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii.
-```{r}
+```{r message=FALSE, warning=FALSE}
 #calculate the GINI to test
-#install.packages("DescTools")
-library(DescTools)
-
 Gini_ii <- inc_ineq %>%
   group_by(Year) %>% 
   summarise(G=Gini(x=Bracket_mid, n=Num_returns,na.rm=T))
@@ -178,7 +203,6 @@ Gini_iiagi <- inc_ineq %>%
 Gini_iiagi 
 
 #Plot
-
 gii=ggplot(Gini_ii,  
        aes(Year,G)) + 
   geom_point()+geom_path() +
@@ -194,12 +218,7 @@ giia=ggplot(Gini_iiagi,
   scale_x_continuous(name="Year",limits=c(1960,2020))+
   scale_y_continuous(name="Gini coefficient",limits=c(.34,.61))+
   theme_bw()
-#CAN WE SCALE BOTH OF THESE SIMILARLY? AND PUT IN LABELS?
-# DOES IT MAKE SENSE TO PLOT THE RATIO
 
-plot(Gini_ii$Year,Gini_ii$G-Gini_iiagi$G)
-abline(0,0)
-library(patchwork)
 gii+giia
 
 ```
