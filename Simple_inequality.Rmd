@@ -1,0 +1,206 @@
+---
+title: "Simple Income Inequality"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages
+You have to have all packages installed, then load them as follows. Note that the order is important, as they will mask one another.
+```{r message=FALSE, warning=FALSE}
+library(DescTools)
+library(fitdistrplus)
+library(spatstat)
+library(tidyverse)
+```
+
+# Functions
+It is good practice to start out the script with the functions you will use
+```{r}
+DMUI=function(x,m){ #DMUI is a function with inputs x (income) and m (the median OR the sufficiency threshold)
+  dmui_out=m*log(x/m)+m #income is adjusted, per TW equation
+  dmui_out[which(x<=m)]=x[which(x<=m)] #but we do not adjust any incomes less than the median/sufficiency threshhold
+  return(dmui_out) #the function returns the the adjusted income
+}  
+```
+
+# Read in the income data
+The data are derived from (NEED INFORMATION/LINK HERE)
+```{r include=FALSE}
+#Read in data as a tibble
+inc_ineq <- read_csv("Inc_ineq_cleaned_ready.csv",col_types = "dddcdddddd") #note Bracket_max is a character because of infinite and the annoying way that read_csv works
+```
+
+# Wrangle and look at the income data
+We have a bit of clean up work to do on the imported income data. For one, the max bracket always refers to infinity (INF) so we need to assign it a number. We also have to make sure that that variable is then recognized as a number (above we indicated it was a character to avoid throwing an error during import). We also add some columns to the dataframe that we will need.
+```{r}
+#Set "infinite" upper bound at 1,000,000 and make sure data types are numeric
+inc_ineq$Bracket_max[which(inc_ineq$Bracket_max=="Inf")]=1000000
+inc_ineq$Bracket_max=as.numeric(inc_ineq$Bracket_max)
+
+#Calculate bin mean and midpoint
+inc_ineq$Bracket_width <- inc_ineq$Bracket_max-inc_ineq$Bracket_min
+inc_ineq$Bracket_mid <- (inc_ineq$Bracket_max+inc_ineq$Bracket_min)/2
+head(inc_ineq) #Displays the top lines of the dataframe, so you can check these variables got added
+
+#Omit years with all zeros by creating a variable that groups inc_ineq by year, summarizes the # of returns, and filters out any years with no data. A new vector is defined with only the (filtered) years
+Nyr <- inc_ineq %>% 
+  group_by(Year) %>%
+  summarize(S=sum(Num_returns)) %>%
+  filter(S>0) 
+uY=Nyr$Year
+
+#A quick plot to help see the years with data
+plot(subset(inc_ineq,Num_returns>0)$Bracket_mid,subset(inc_ineq,Num_returns>0)$AGI_bin_mean) 
+abline(0,1)
+```
+
+# Calculating the ratio between Adjusted and Unadjusted income
+
+## Starting with the median-based adjustment
+
+We calculate the weighted median, using bin mean and number of returns. We then adjust all brackets above this median using the function we created. We also adjust the bracket in which the sample median falls if the bracket mean is greater than the sample median; we do not adjust the bracket if its mean is less than the sample median.
+```{r}
+#Calculate median from AGI_bin_mean centers and Num_returns (weighted median) for years with data
+Y_med <- inc_ineq %>%
+  filter(Year %in% uY) %>% 
+  group_by(Year) %>% 
+  summarise(Median = weighted.median(x = AGI_bin_mean, w = Num_returns))
+
+#Add a column to inc_ineq that is the adjusted mean
+#Note we call the function DMUI, we feed it 
+# (x) the bin mean income from inc_ineq, and
+# (m) the weighted median of the entire distribution that year from Y_med
+#The match function finds the median data in Y_med where the year matches inc_ineq I NEED TO STUDY THIS
+inc_ineq$AGI_bin_mean_DMUI=DMUI(x = inc_ineq$AGI_bin_mean,m=Y_med$Median[match(inc_ineq$Year,Y_med$Year)])
+
+#Generate numerical integrals representing the total AGI for both the adjusted and unadjusted incomes
+#We do this by multiplying the (adjusted and unadjusted) bin mean by the number of returns
+Ysum <- inc_ineq %>% 
+  group_by(Year) %>% 
+  summarize(AGI_ann=sum(AGI_USD_all),
+            AGI_ann2=sum(AGI_bin_mean*Num_returns),
+            AGI_annDMUI=sum(AGI_bin_mean_DMUI*Num_returns))
+
+#generate ratios of unadjusted and adjusted integrals
+Ysum$DMUI_Ratio=Ysum$AGI_annDMUI/Ysum$AGI_ann
+
+plot(Ysum$Year,Ysum$DMUI_Ratio)
+
+output_M<-Ysum %>% select(Year,DMUI_Ratio)
+output_M<-Ysum[,c("Year","DMUI_Ratio")]
+
+write_csv(output_M,"DMUI_Ratio_Median.csv")
+```
+
+### Plot all years
+```{r}
+ggplot(inc_ineq)+
+  geom_point(aes(AGI_bin_mean_DMUI,Num_returns),color="blue")+
+  geom_path(aes(AGI_bin_mean_DMUI,Num_returns),color="blue")+
+  geom_point(aes(AGI_bin_mean,Num_returns))+
+  geom_path(aes(AGI_bin_mean,Num_returns))+
+  facet_wrap("Year",scales="free_y")+
+  scale_x_log10()+
+  geom_vline(data=Y_med,aes(xintercept=Median))
+```
+
+## Do it all again with the sufficiency thresholds
+
+We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. These data are derived from (NEED SOURCE)
+```{r}
+suff_th <- read_csv("Suff_thresh_INQ_clean.csv")
+head(suff_th)
+```
+
+
+Now we want to run the DMUI function using the sufficiency threshold, and add the ratio to the output dataframe
+```{r}
+inc_ineq$AGI_ST_DMUI=DMUI(x = inc_ineq$AGI_bin_mean,m=suff_th$DBEDT_S[match(inc_ineq$Year,suff_th$YEAR)])
+
+Ysum_ST <- inc_ineq %>% 
+  group_by(Year) %>% 
+  summarize(AGI_ann=sum(AGI_USD_all),
+            AGI_ann2=sum(AGI_bin_mean*Num_returns),
+            AGI_annSTDMUI=sum(AGI_ST_DMUI*Num_returns))
+view(Ysum_ST)
+
+Ysum_ST$DMUI_Ratio_ST=Ysum_ST$AGI_annSTDMUI/Ysum_ST$AGI_ann
+
+view(Ysum_ST)
+plot(Ysum_ST$Year,Ysum_ST$DMUI_Ratio_ST)
+
+output_ST<-Ysum_ST %>% select(Year,DMUI_Ratio_ST)
+output_ST<-Ysum_ST[,c("Year","DMUI_Ratio_ST")]
+write_csv(output_ST,"DMUI_Ratio_ST.csv")
+
+#Create a combined data file
+output_all <- left_join(output_M, output_ST)
+write_csv(output_all,"DMUI_Ratio_both.csv")
+```
+
+This compares the two Ratios
+```{r}
+oa_plot=output_all %>% pivot_longer(cols=c("DMUI_Ratio","DMUI_Ratio_ST"))
+
+ggplot(oa_plot, aes(x = Year, y = value,color=name)) +
+  geom_point(aes()) +
+  geom_path(aes()) +
+  scale_color_discrete(name="Threshold Style",type=c("blue","darkgreen"),labels=c("Median","Sufficiency"))
+  labs(x = "Year",
+       y = "Ratio of adjusted income to unadjusted income",
+       color = "Legend") +
+  theme_bw()
+
+```
+
+
+# GINI for comparison
+
+To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii.
+```{r}
+#calculate the GINI to test
+#install.packages("DescTools")
+library(DescTools)
+
+Gini_ii <- inc_ineq %>%
+  group_by(Year) %>% 
+  summarise(G=Gini(x=Bracket_mid, n=Num_returns,na.rm=T))
+Gini_ii  
+
+Gini_iiagi <- inc_ineq %>%
+  group_by(Year) %>% 
+  summarise(G=Gini(x=AGI_bin_mean, n=Num_returns,na.rm=T))
+Gini_iiagi 
+
+#Plot
+
+gii=ggplot(Gini_ii,  
+       aes(Year,G)) + 
+  geom_point()+geom_path() +
+  labs(title = "Gini, Calculated with Bin_Midpoint") +
+  scale_x_continuous(name="Year",limits=c(1960,2020))+
+  scale_y_continuous(name="Gini coefficient",limits=c(.34,.61))+
+  theme_bw()
+
+giia=ggplot(Gini_iiagi,  
+       aes(Year,G)) + 
+  geom_point()+geom_path() +
+  labs(title = "Gini, Calculated with AGI_Bin_Mean") +
+  scale_x_continuous(name="Year",limits=c(1960,2020))+
+  scale_y_continuous(name="Gini coefficient",limits=c(.34,.61))+
+  theme_bw()
+#CAN WE SCALE BOTH OF THESE SIMILARLY? AND PUT IN LABELS?
+# DOES IT MAKE SENSE TO PLOT THE RATIO
+
+plot(Gini_ii$Year,Gini_ii$G-Gini_iiagi$G)
+abline(0,0)
+library(patchwork)
+gii+giia
+
+```
+
