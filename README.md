@@ -1,0 +1,2 @@
+# IncomeInequality
+Index calculation
