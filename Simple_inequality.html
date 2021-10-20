@@ -189,7 +189,7 @@ library(tidyverse)</code></pre>
 </div>
 <div id="read-in-the-income-data" class="section level2">
 <h2>Read in the income data</h2>
-<p>The data are derived from HI state tax returns (<a href="https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/" class="uri">https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/</a>) and data sent directly by DBEDT to the project team. The data report the number of returns per income bracket per year for years 1960-2018, with 2007-2011, 2019, 2020 missing. Note that the reporting brackets differ by year.</p>
+<p>The data are derived from HI state tax returns (<a href="https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/" class="uri">https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/</a>) and data sent directly by DBEDT to the project team. The data report the number of returns per income bracket per year for years 1960-2018, with 2007-2011, 2019, 2020 missing. Note that the reporting brackets differ by year. The data are stored in a csv file, and additional years of data can be added there.</p>
 <pre class="r"><code>#Read in data as a tibble
 inc_ineq &lt;- read_csv(&quot;Inc_ineq_cleaned_ready.csv&quot;,col_types = &quot;dddcdddddd&quot;) #note Bracket_max is a character because of infinite and the annoying way that read_csv works</code></pre>
 </div>
@@ -259,7 +259,7 @@ write_csv(output_M,&quot;DMUI_Ratio_Median.csv&quot;)</code></pre>
 <div id="plots---median-based" class="section level4">
 <h4>Plots - median-based</h4>
 <pre class="r"><code>#A quick plot to help see the difference between AGI mean and mid point for each bracket. 
-#Note that in lower brackets, the mean and the mid point are similar, but in upper brackets, the midpoint falls below the mean. Note that the two  data groups that are in the highest brackets could reflect an artifact of setting the max at $1million.
+#Note that in lower brackets, the mean and the mid point are similar, but in upper brackets, the midpoint falls below the mean. Note that the two  data groups that are in the highest brackets could reflect an artifact of setting the max at $1 million. If desired, the max could be set at different levels in the data wrangling phases to compare outcomes.
 ggplot(subset(inc_ineq,Num_returns&gt;0), 
        aes(x=Bracket_mid, y=AGI_bin_mean)) +
          geom_point() +
@@ -296,7 +296,7 @@ ggplot(output_M,
 </div>
 <div id="sufficiency-threshold-based-adjustment" class="section level3">
 <h3>Sufficiency threshold-based adjustment</h3>
-<p>We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. We had one sufficiency threshold set by ALICE and a second threshold by DBEDT, which is the one we opted to use. The DBEDT one-adult self-sufficiency income threshold (state: $35,143 in 2018) is from the Self Sufficiency Income Standard Report (<a href="https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf" class="uri">https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf</a>). We adjusted the 2018 value for inflation to get previous and future years. Other years for which sufficiency thresholds exist (2009, 2011, 2013, 2014, 2016) were not incorporated.</p>
+<p>We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. We had one sufficiency threshold set by ALICE and a second threshold by DBEDT, which is the one we opted to use. The DBEDT one-adult self-sufficiency income threshold (state: $35,143 in 2018) is from the Self Sufficiency Income Standard Report (<a href="https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf" class="uri">https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf</a>). We adjusted the 2018 value for inflation to get previous and future years. Other years for which sufficiency thresholds exist (2009, 2011, 2013, 2014, 2016) were not incorporated. As more data become available, future iterations could vary the sufficiency thresholds by year in the input file.</p>
 <pre class="r"><code>suff_th &lt;- read_csv(&quot;Suff_thresh_INQ_clean.csv&quot;)
 #head(suff_th)</code></pre>
 <p>Now we want to run the DMUI function using the sufficiency threshold, and add the ratio to the output dataframe</p>
@@ -352,7 +352,7 @@ ggplot(oa_plot, aes(x = Year, y = value,color=name)) +
 </div>
 <div id="gini-for-comparison" class="section level2">
 <h2>GINI for comparison</h2>
-<p>To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii.</p>
+<p>To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii. We use the same income data as above.</p>
 <pre class="r"><code>#calculate the GINI to test
 Gini_ii &lt;- inc_ineq %&gt;%
   group_by(Year) %&gt;% 
