@@ -32,7 +32,7 @@ DMUI=function(x,m){ #DMUI is a function with inputs x (income) and m (the median
 ```
 
 ## Read in the income data
-The data are derived from HI state tax returns (https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/) and data sent directly by DBEDT to the project team. The data report the number of returns per income bracket per year for years 1960-2018, with 2007-2011, 2019, 2020 missing. Note that the reporting brackets differ by year.
+The data are derived from HI state tax returns (https://tax.hawaii.gov/stats/a5_1annual/a5_5ind_inc/) and data sent directly by DBEDT to the project team. The data report the number of returns per income bracket per year for years 1960-2018, with 2007-2011, 2019, 2020 missing. Note that the reporting brackets differ by year. The data are stored in a csv file, and additional years of data can be added there.
 ```{r message=FALSE, warning=FALSE}
 #Read in data as a tibble
 inc_ineq <- read_csv("Inc_ineq_cleaned_ready.csv",col_types = "dddcdddddd") #note Bracket_max is a character because of infinite and the annoying way that read_csv works
@@ -104,7 +104,7 @@ write_csv(output_M,"DMUI_Ratio_Median.csv")
 
 ```{r message=FALSE, warning=FALSE}
 #A quick plot to help see the difference between AGI mean and mid point for each bracket. 
-#Note that in lower brackets, the mean and the mid point are similar, but in upper brackets, the midpoint falls below the mean. Note that the two  data groups that are in the highest brackets could reflect an artifact of setting the max at $1million.
+#Note that in lower brackets, the mean and the mid point are similar, but in upper brackets, the midpoint falls below the mean. Note that the two  data groups that are in the highest brackets could reflect an artifact of setting the max at $1 million. If desired, the max could be set at different levels in the data wrangling phases to compare outcomes.
 ggplot(subset(inc_ineq,Num_returns>0), 
        aes(x=Bracket_mid, y=AGI_bin_mean)) +
          geom_point() +
@@ -142,7 +142,7 @@ ggplot(inc_ineq)+
 
 ### Sufficiency threshold-based adjustment
 
-We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. We had one sufficiency threshold set by ALICE and a second threshold by DBEDT, which is the one we opted to use. The DBEDT one-adult self-sufficiency income threshold (state: $35,143 in 2018) is from the Self Sufficiency Income Standard Report (https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf). We adjusted the 2018 value for inflation to get previous and future years. Other years for which sufficiency thresholds exist (2009, 2011, 2013, 2014, 2016) were not incorporated.
+We start by reading in the data for the sufficiency thresholds, and taking a look at the dataset. We had one sufficiency threshold set by ALICE and a second threshold by DBEDT, which is the one we opted to use. The DBEDT one-adult self-sufficiency income threshold (state: $35,143 in 2018) is from the Self Sufficiency Income Standard Report (https://files.hawaii.gov/dbedt/economic/reports/self-sufficiency/self-sufficiency_2018.pdf). We adjusted the 2018 value for inflation to get previous and future years. Other years for which sufficiency thresholds exist (2009, 2011, 2013, 2014, 2016) were not incorporated. As more data become available, future iterations could vary the sufficiency thresholds by year in the input file.
 
 ```{r message=FALSE, warning=FALSE}
 suff_th <- read_csv("Suff_thresh_INQ_clean.csv")
@@ -209,7 +209,7 @@ ggplot(oa_plot, aes(x = Year, y = value,color=name)) +
 
 ## GINI for comparison
 
-To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii.
+To build intuition, we examine income inequality using a traditional indicator, the GINI coefficient. For various reasons, GINI is a poor indicator for Hawaii. We use the same income data as above.
 ```{r message=FALSE, warning=FALSE}
 #calculate the GINI to test
 Gini_ii <- inc_ineq %>%
